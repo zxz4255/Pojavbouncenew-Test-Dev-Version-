@@ -1,0 +1,58 @@
+name: Build Test (ClickGUI only)
+
+on:
+  push:
+    branches: [ nextgen, main, master, test ]
+  workflow_dispatch:
+
+concurrency:
+  group: build-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: false
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+          gradle-home-cache-cleanup: true
+
+      - run: chmod +x gradlew
+
+      - name: Build (skip tests/docs)
+        env:
+          GRADLE_OPTS: -Dorg.gradle.parallel=true -Dorg.gradle.caching=true -Dkotlin.incremental=true
+        run: |
+          ./gradlew build \
+            --build-cache \
+            --parallel \
+            --no-daemon \
+            -x test \
+            -x detekt \
+            -x check \
+            -x dokkaGenerate \
+            -x dokkaGenerateHtml \
+            -x dokkaHtml \
+            -x javadoc \
+            -x sourcesJar \
+            --stacktrace
+
+      - name: Upload jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: liquidbounce-test
+          path: build/libs/liquidbounce-*.jar
+          retention-days: 7
+          if-no-files-found: error
